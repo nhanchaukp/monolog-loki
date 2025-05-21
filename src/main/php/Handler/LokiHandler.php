@@ -67,6 +67,7 @@ class LokiHandler extends AbstractProcessingHandler
         }
         if (isset($apiConfig['tenant_id'])) {
             $this->tenantId = $apiConfig['tenant_id'];
+            $this->globalContext['tenantId'] = $apiConfig['tenant_id'];
         }
     }
 
@@ -105,51 +106,19 @@ class LokiHandler extends AbstractProcessingHandler
     }
 
     /** @throws \JsonException */
-    private function sendPacket(array $packet): void
-    {
+    protected function sendPacket(array $packet): void {
         $payload = json_encode($packet, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         $url = sprintf('%s/loki/api/v1/push', $this->entrypoint);
-        if (null === $this->connection) {
-            $this->connection = curl_init($url);
+        $env_vars = [
+            'LOKI_URL' => $url,
+            'LOKI_AUTH' => implode(':', $this->basicAuth),
+            'PAYLOAD' => $payload,
+            'CONTENT_LENGTH' => strlen($payload),
+        ];
 
-            if (!$this->connection) {
-                throw new \LogicException('Unable to connect to ' . $url);
-            }
-        }
-
-        if (false !== $this->connection) {
-            $curlOptions = array_replace(
-                [
-                    CURLOPT_CONNECTTIMEOUT_MS => 100,
-                    CURLOPT_TIMEOUT_MS => 200,
-                    CURLOPT_CUSTOMREQUEST => 'POST',
-                    CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_POSTFIELDS => $payload,
-                    CURLOPT_HTTPHEADER => [
-                        'Content-Type: application/json',
-                        'Content-Length: ' . strlen($payload),
-                    ],
-                ],
-                $this->customCurlOptions
-            );
-
-            if (!empty($this->basicAuth)) {
-                $curlOptions[CURLOPT_HTTPAUTH] = CURLAUTH_BASIC;
-                $curlOptions[CURLOPT_USERPWD] = implode(':', $this->basicAuth);
-            }
-
-            if (null !== $this->tenantId) {
-                $curlOptions[CURLOPT_HTTPHEADER][] = 'X-Scope-OrgID: ' . $this->tenantId;
-            }
-
-            curl_setopt_array($this->connection, $curlOptions);
-
-            // Should Loki not be available yet,
-            // too many retries attempts cause some processes to hang,
-            // awaiting retries results so we limit to one attempt.
-            // Note :  Loki is a network related logging system ! It should not be the only logging system relied on.
-            Curl\Util::execute($this->connection, 1, false);
-        }
+        $process = \Symfony\Component\Process\Process::fromShellCommandline('curl -u "$LOKI_AUTH" -H "Content-Type: application/json" -H "Content-Length: $CONTENT_LENGTH" -d "$PAYLOAD" -X POST $LOKI_URL', NULL, $env_vars);
+        $process->run();
     }
 
     protected function getDefaultFormatter(): FormatterInterface

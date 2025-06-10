@@ -7,13 +7,10 @@
   "prefer-stable": true,
   "authors": [
     {
-      "name": "Ryan RAJKOMAR",
-      "email": "ryan.rajkomar@itspire.fr"
+      "name": "Nhan Chau KP",
+      "email": "contact@nhandev.com"
     }
   ],
-  "support": {
-    "issues": "https://github.com/itspire/monolog-loki/issues"
-  },
   "require": {
     "php": "~8.1",
     "monolog/monolog": "~3.0",
